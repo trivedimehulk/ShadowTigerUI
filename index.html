@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatBot - Log Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen">
+    
+    <div class="w-full max-w-3xl bg-gray-800 shadow-lg rounded-lg p-5 flex flex-col h-[85vh]">
+        
+        <!-- Title -->
+        <h2 class="text-xl font-bold text-center pb-2 border-b border-gray-700">💬 AI Log Analyzer</h2>
+
+        <!-- API Endpoint Input Box -->
+        <div class="mb-3 text-center">
+            <label for="api-endpoint" class="block text-sm font-bold mb-2">🔗 API Endpoint:</label>
+            <input id="api-endpoint" 
+                   type="text" 
+                   class="w-full bg-gray-700 text-white p-2 rounded focus:outline-none" 
+                   placeholder="Enter API URL..." 
+                   onchange="updateAPIEndpoint()">
+        </div>
+
+        <!-- Chat Window -->
+        <div id="chat-window" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <!-- Messages will appear here -->
+        </div>
+
+        <!-- Input Box -->
+        <div class="flex border-t border-gray-700 pt-3">
+            <input id="user-input" 
+                   type="text" 
+                   class="flex-1 bg-gray-700 text-white p-3 rounded-l-lg focus:outline-none" 
+                   placeholder="Ask about logs..."
+                   onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()" 
+                    class="bg-blue-600 hover:bg-blue-700 px-5 py-3 rounded-r-lg font-bold">
+                Send 🚀
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Logs Modal (Hidden by Default) -->
+    <div id="logs-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-gray-800 rounded-lg shadow-lg p-6 w-3/4 max-w-4xl">
+            <h2 class="text-lg font-bold mb-3">📜 Relevant Logs</h2>
+            <div class="overflow-y-auto max-h-[60vh]">
+                <table id="logs-table" class="w-full text-left border-collapse border border-gray-700 rounded-lg">
+                    <thead>
+                        <tr class="bg-gray-700">
+                            <th class="px-3 py-2 border border-gray-600">Timestamp</th>
+                            <th class="px-3 py-2 border border-gray-600">Log Message</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-table-body"></tbody>
+                </table>
+            </div>
+            <button onclick="closeLogsModal()" 
+                    class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">
+                Close Logs
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 🔹 Load API endpoint from localStorage or use default
+        let API_URL = localStorage.getItem("api_endpoint") || "https://0a65-35-247-189-56.ngrok-free.app/query";
+        document.getElementById("api-endpoint").value = API_URL;  // Set input field value
+
+        // ✅ Update API endpoint when changed
+        function updateAPIEndpoint() {
+            API_URL = document.getElementById("api-endpoint").value.trim();
+            localStorage.setItem("api_endpoint", API_URL);  // Save new endpoint to localStorage
+            console.log("Updated API URL:", API_URL);
+        }
+
+        // ✅ Handle Enter Key Press
+        function handleKeyPress(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        }
+
+        // ✅ Function to send user message to API
+        async function sendMessage() {
+            const inputBox = document.getElementById("user-input");
+            const chatWindow = document.getElementById("chat-window");
+            const userMessage = inputBox.value.trim();
+
+            if (!userMessage) return;
+
+            // Append User Message
+            chatWindow.innerHTML += `
+                <div class="text-right">
+                    <p class="bg-blue-500 inline-block px-4 py-2 rounded-lg shadow-md">${userMessage}</p>
+                </div>
+            `;
+            inputBox.value = "";
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+
+            // Call API
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ question: userMessage })
+                });
+
+                const data = await response.json();
+
+                // ✅ Append AI Summary + "Show Logs" Button
+                chatWindow.innerHTML += `
+                    <div class="text-left">
+                        <p class="bg-green-600 inline-block px-4 py-2 rounded-lg shadow-md">
+                            <strong>🧠 Analysis:</strong> ${data.summary || "No summary available"}
+                        </p>
+                        <button onclick="openLogsModal()" 
+                                class="mt-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded-lg">
+                            📜 Show Relevant Logs
+                        </button>
+                    </div>
+                `;
+
+                // ✅ Populate Logs Table but Keep It Hidden
+                if (data.logs && data.logs.length > 0) {
+                    const logTableBody = document.getElementById("log-table-body");
+                    logTableBody.innerHTML = ""; // Clear old logs before adding new ones
+                    data.logs.forEach(log => {
+                        logTableBody.innerHTML += `
+                            <tr class="bg-gray-800 border border-gray-700">
+                                <td class="px-3 py-2 border border-gray-600">${extractTimestamp(log)}</td>
+                                <td class="px-3 py-2 border border-gray-600">${log}</td>
+                            </tr>
+                        `;
+                    });
+                }
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+            } catch (error) {
+                console.error("Error:", error);
+                chatWindow.innerHTML += `
+                    <div class="text-left">
+                        <p class="bg-red-500 inline-block px-4 py-2 rounded-lg shadow-md">
+                            ❌ Error contacting API. Please check the URL or CORS policy.
+                        </p>
+                    </div>
+                `;
+            }
+        }
+
+        // ✅ Function to Show Logs Modal
+        function openLogsModal() {
+            document.getElementById("logs-modal").classList.remove("hidden");
+        }
+
+        // ✅ Function to Close Logs Modal
+        function closeLogsModal() {
+            document.getElementById("logs-modal").classList.add("hidden");
+        }
+
+        // ✅ Function to Extract Timestamp from Log
+        function extractTimestamp(log) {
+            const match = log.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/); // Matches YYYY-MM-DD HH:MM:SS
+            return match ? match[0] : "N/A";
+        }
+    </script>
+
+</body>
+</html>
